@@ -349,6 +349,13 @@
   const tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
 
+  // Group-launched Mini Apps can't use Telegram.WebApp.sendData() to report
+  // results (that only works for private-chat keyboard buttons), so this
+  // game POSTs results directly to the bot's own HTTP endpoint instead.
+  // Fill in the public URL of your deployed bot (e.g. your Railway URL)
+  // here — see README.md "Deploying so group play works" section.
+  const API_BASE = "PASTE_YOUR_BOT_SERVER_URL_HERE"; // e.g. "https://your-app.up.railway.app"
+
   const params = new URLSearchParams(window.location.search);
 
   // Group chats launch this via a Direct Link Mini App
@@ -570,7 +577,7 @@
     setTimeout(tick, 1000);
   }
 
-  function finishRound(){
+  async function finishRound(){
     if (ended) return;
     ended = true;
     document.getElementById('game-screen').classList.add('hidden');
@@ -578,23 +585,39 @@
     endScreen.classList.add('show');
     document.getElementById('final-score').textContent = score;
 
-    const payload = {
-      round_id: roundId,
-      words: foundWords.map(w => w.word),
-      score: score
-    };
+    const sendingMsg = document.getElementById('sending-msg');
 
-    if (tg){
-      try {
-        tg.sendData(JSON.stringify(payload));
-      } catch (e) {
-        document.getElementById('sending-msg').textContent = 'Could not reach the chat — screenshot this score!';
-      }
-      setTimeout(() => { try { tg.close(); } catch(e){} }, 900);
-    } else {
-      document.getElementById('sending-msg').textContent =
-        'Preview mode (not opened inside Telegram) — nothing was sent.';
+    if (!tg){
+      sendingMsg.textContent = 'Preview mode (not opened inside Telegram) — nothing was sent.';
+      return;
     }
+    if (!API_BASE || API_BASE.indexOf('PASTE_YOUR_BOT_SERVER_URL_HERE') !== -1){
+      sendingMsg.textContent = 'Game isn\u2019t configured with a server URL yet — ask whoever set up the bot to finish setup.';
+      return;
+    }
+
+    try {
+      const res = await fetch(API_BASE + '/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          round_id: roundId,
+          words: foundWords.map(w => w.word),
+          init_data: tg.initData
+        })
+      });
+      const data = await res.json();
+      if (data && data.ok){
+        sendingMsg.textContent = 'Sent! Check the chat for the leaderboard once the round closes.';
+        if (tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+      } else {
+        sendingMsg.textContent = 'Could not send your score (' + (data && data.error ? data.error : 'unknown error') + ') — try again next round.';
+      }
+    } catch (e) {
+      sendingMsg.textContent = 'Could not reach the server — check your connection and try next round.';
+    }
+
+    setTimeout(() => { try { tg.close(); } catch(e){} }, 1400);
   }
 })();
 </script>
