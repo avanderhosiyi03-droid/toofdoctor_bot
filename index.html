@@ -354,7 +354,7 @@
   // game POSTs results directly to the bot's own HTTP endpoint instead.
   // Fill in the public URL of your deployed bot (e.g. your Railway URL)
   // here — see README.md "Deploying so group play works" section.
-  const API_BASE = "https://toofdoctorbot-production.up.railway.app"; // e.g. "https://your-app.up.railway.app"
+  const API_BASE = "https://toofdoctorbot-production.up.railway.app";
 
   const params = new URLSearchParams(window.location.search);
 
@@ -591,7 +591,7 @@
       sendingMsg.textContent = 'Preview mode (not opened inside Telegram) — nothing was sent.';
       return;
     }
-    if (!API_BASE || API_BASE.indexOf('https://toofdoctorbot-production.up.railway.app') !== -1){
+    if (!API_BASE || API_BASE.indexOf('PASTE_YOUR_BOT_SERVER_URL_HERE') !== -1){
       sendingMsg.textContent = 'Game isn\u2019t configured with a server URL yet — ask whoever set up the bot to finish setup.';
       return;
     }
