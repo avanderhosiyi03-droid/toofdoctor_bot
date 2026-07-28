@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -307,7 +308,7 @@
   <div class="timer-card">
     <div class="timer-row">
       <span>Time on the clock</span>
-      <span id="time-left">90s</span>
+      <span id="time-left">60s</span>
     </div>
     <div class="timer-bar-track"><div class="timer-bar-fill" id="timer-fill"></div></div>
   </div>
@@ -363,18 +364,27 @@
     startParam = params.get('startapp');
   }
 
-  let roundId, lettersParam, duration;
+  let roundId, lettersParam, duration, roundStartTime;
   if (startParam) {
     const parts = startParam.split('-');
     roundId = parts[0] || 'local-test';
     lettersParam = (parts[1] || 'PZALREM').toUpperCase();
-    duration = parseInt(parts[2] || '90', 10);
+    duration = parseInt(parts[2] || '60', 10);
+    roundStartTime = parts[3] ? parseInt(parts[3], 10) : (Date.now() / 1000);
   } else {
     roundId = params.get('round') || 'local-test';
     lettersParam = (params.get('letters') || 'PZALREM').toUpperCase();
-    duration = parseInt(params.get('duration') || '90', 10);
+    duration = parseInt(params.get('duration') || '60', 10);
+    roundStartTime = Date.now() / 1000;
   }
   const letters = lettersParam.split('');
+
+  // Sync to the round's real start time so a player who opens the game
+  // a bit late gets a shorter timer instead of a fresh full one that
+  // outlasts the bot's own leaderboard clock.
+  const nowSeconds = Date.now() / 1000;
+  const elapsedBeforeOpen = Math.max(0, nowSeconds - roundStartTime);
+  const initialTimeLeft = Math.max(0, Math.round(duration - elapsedBeforeOpen));
 
   const POINTS = {3:10, 4:25, 5:50, 6:80, 7:120};
 
@@ -391,7 +401,7 @@
   let foundWords = [];    // {word, points}
   let score = 0;
   let ended = false;
-  let timeLeft = duration;
+  let timeLeft = initialTimeLeft;
 
   // ---- render tiles ----
   const tilesEl = document.getElementById('tiles');
@@ -528,20 +538,37 @@
   const fillEl = document.getElementById('timer-fill');
   const timeEl = document.getElementById('time-left');
 
+  function renderTime(){
+    timeEl.textContent = timeLeft + 's';
+    const pct = Math.max(0, (timeLeft / duration) * 100);
+    fillEl.style.width = pct + '%';
+    fillEl.classList.toggle('low', timeLeft <= 15);
+  }
+  renderTime();
+
   function tick(){
     if (ended) return;
     timeLeft--;
     if (timeLeft <= 0){
       timeLeft = 0;
+      renderTime();
       finishRound();
+      return;
     }
-    timeEl.textContent = timeLeft + 's';
-    const pct = Math.max(0, (timeLeft / duration) * 100);
-    fillEl.style.width = pct + '%';
-    fillEl.classList.toggle('low', timeLeft <= 15);
-    if (!ended) setTimeout(tick, 1000);
+    renderTime();
+    setTimeout(tick, 1000);
   }
-  setTimeout(tick, 1000);
+
+  if (initialTimeLeft <= 0){
+    // Player opened the link after the round's clock had already run out.
+    document.getElementById('game-screen').classList.add('hidden');
+    document.getElementById('end-screen').classList.add('show');
+    document.getElementById('sending-msg').textContent =
+      "This round's clock already ran out before you opened it — catch the next one!";
+    ended = true;
+  } else {
+    setTimeout(tick, 1000);
+  }
 
   function finishRound(){
     if (ended) return;
